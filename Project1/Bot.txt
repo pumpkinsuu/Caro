@@ -1,0 +1,478 @@
+﻿#include "Bot.h"
+
+
+Bot::Bot(Board& _board)
+	:board(_board),
+	 MangDiemTanCong{ 0,9,54,162,1458,13112,118008 }, MangDiemPhongNgu{ 0,3,27,140,729,6561,59049 },
+	 lvl(0), turn(0)
+{
+
+}
+
+
+void Bot::move()
+{
+	if (board.turn != turn)
+		return;
+
+	if (board.stack.empty())
+	{
+		if (board.getCur(COL / 2, ROW / 2))
+			board.check();	
+
+		return;
+	}
+
+	if (lvl == 0)
+		easy();
+	else
+		hard();
+}
+
+
+bool Bot::load(const string& save_name)
+{
+	string file = ".\\data\\save\\1 player\\bot\\";
+	file += save_name;
+	file += ".txt";
+
+	std::ifstream in(file);
+	if (!in.good())
+	{
+		std::cout << "Load Fail! \n";
+		return 0;
+	}
+
+	in >> turn >> lvl;
+
+	return 1;
+}
+
+bool Bot::save(const string& save_name)
+{
+	string file = ".\\data\\save\\1 player\\bot\\";
+	file += save_name;
+	file += ".txt";
+
+	std::ofstream out(file);
+	if (!out.is_open())
+	{
+		std::cout << "Save Fail! \n";
+		return 0;
+	}
+
+	out << turn << ' ' << lvl;
+
+	return 1;
+}
+
+
+//
+void Bot::easy()
+{
+	vector<sf::Vector2i> X;
+
+	for (int i = 0; i < COL; ++i)
+		for (int j = 0; j < ROW; ++j)
+			if (board.box[i][j] == 0)
+				if (TestAround(i - 1, j) || TestAround(i + 1, j) || TestAround(i, j - 1) || TestAround(i - 1, j + 1))
+					X.push_back(sf::Vector2i(i, j));
+
+	srand(time(0));
+	int n = rand() % X.size();
+
+	if (board.getCur(X[n].x, X[n].y))
+		board.check();
+}
+
+bool Bot::TestAround(int x, int y)
+{
+	int val = (turn) ? -1 : 1;
+
+	if (board.getCur(x, y))
+		if (board.box[x][y] == val)
+			return 1;
+
+	return 0;
+}
+
+
+void Bot::hard()
+{
+	int DiemMax = -1;
+	int x, y;
+	int x1, y1;
+	for (int i = 0; i < COL; i++)
+	{
+		for (int j = 0; j < ROW; j++)
+		{
+			if (board.box[i][j] == 0)
+			{
+				int DiemTanCong = DiemTC_DuyetDoc(i, j) + DiemTC_DuyetNgang(i, j) + DiemTC_DuyetCheoNguoc(i, j) + DiemTC_DuyetCheoXuoi(i, j);
+				int DiemPhongNgu = DiemPN_DuyetDoc(i, j) + DiemPN_DuyetNgang(i, j) + DiemPN_DuyetCheoNguoc(i, j) + DiemPN_DuyetCheoXuoi(i, j);
+				int DiemViTri = (DiemTanCong > DiemPhongNgu) ? DiemTanCong : DiemPhongNgu;
+				if (DiemMax < DiemViTri)
+				{
+					DiemMax = DiemViTri;
+					x = i;
+					y = j;
+				}
+				else
+				{
+					x1 = i;
+					y1 = j;
+				}
+			}
+		}
+	}
+
+	bool ok = 0;
+
+	if (DiemMax == -1)
+	{
+		ok = board.getCur(x1, y1);
+	}
+	else
+		ok = board.getCur(x, y);
+
+	if (ok)
+		board.check();
+}
+
+
+int Bot::DiemTC_DuyetDoc(int CurrDong, int CurrCot)
+{
+	int DiemTong = 0;
+	int DiemTC = 0;
+	int SoQuanTa = 0;
+	int SoQuanDich = 0;
+	int SoQuanTaLienTiep = 0;
+	for (int Dem = 1; Dem < 6 && CurrDong + Dem < ROW; Dem++)
+	{
+		if (board.box[CurrDong + Dem][CurrCot] == -1)
+		{
+			SoQuanTa++;
+		}
+		else if (board.box[CurrDong + Dem][CurrCot] == 1)
+		{
+			DiemTong -= 9;//tương đương với điểm 1 quân mình
+			SoQuanDich++;
+			break;
+		}
+		else
+			break;
+	}
+	for (int Dem = 1; Dem < 6 && CurrDong - Dem >= 0; Dem++)
+	{
+		if (board.box[CurrDong - Dem][CurrCot] == -1)
+			SoQuanTa++;
+		else if (board.box[CurrDong - Dem][CurrCot] == 1)
+		{
+			DiemTong -= 9;
+			SoQuanDich++;
+			break;
+		}
+		else
+			break;
+	}
+	if (SoQuanTa >= 5)
+	{
+		return MangDiemTanCong[SoQuanTa];
+	}
+	if (SoQuanDich == 2)
+		return 0;
+	DiemTong -= MangDiemTanCong[SoQuanDich]; //có thể chỉnh
+	DiemTC += MangDiemTanCong[SoQuanTa];//có thể chỉnh
+	DiemTong += DiemTC;
+	return DiemTong;
+}
+int Bot::DiemTC_DuyetNgang(int CurrDong, int CurrCot)
+{
+	int DiemTong = 0;
+	int DiemTC = 0;
+	int SoQuanTa = 0;
+	int SoQuanDich = 0;
+	for (int Dem = 1; Dem < 6 && CurrCot + Dem < COL; Dem++)
+	{
+		if (board.box[CurrDong][CurrCot + Dem] == -1)
+			SoQuanTa++;
+		else if (board.box[CurrDong][CurrCot + Dem] == 1)
+		{
+			DiemTong -= 9;
+			SoQuanDich++;
+			break;
+		}
+		else
+			break;
+	}
+	for (int Dem = 1; Dem < 6 && CurrCot - Dem >= 0; Dem++)
+	{
+		if (board.box[CurrDong][CurrCot - Dem] == -1)
+			SoQuanTa++;
+		else if (board.box[CurrDong][CurrCot - Dem] == 1)
+		{
+			DiemTong -= 9;
+			SoQuanDich++;
+			break;
+		}
+		else
+			break;
+	}
+	if (SoQuanTa >= 5)
+	{
+		return MangDiemTanCong[SoQuanTa];
+	}
+	if (SoQuanDich == 2)
+		return 0;
+	DiemTong -= MangDiemTanCong[SoQuanDich]; //có thể chỉnh
+	DiemTC += MangDiemTanCong[SoQuanTa];//có thể chỉnh
+	DiemTong += DiemTC;
+	return DiemTong;
+}
+int Bot::DiemTC_DuyetCheoNguoc(int CurrDong, int CurrCot)
+{
+	int DiemTong = 0;
+	int DiemTC = 0;
+	int SoQuanTa = 0;
+	int SoQuanDich = 0;
+	for (int Dem = 1; Dem < 6 && CurrCot + Dem < COL &&CurrDong - Dem >= 0; Dem++)
+	{
+		if (board.box[CurrDong - Dem][CurrCot + Dem] == -1)
+			SoQuanTa++;
+		else if (board.box[CurrDong - Dem][CurrCot + Dem] == 1)
+		{
+			DiemTong -= 9;
+			SoQuanDich++;
+			break;
+		}
+		else
+			break;
+	}
+	for (int Dem = 1; Dem < 6 && CurrCot - Dem >= 0 && CurrDong + Dem < ROW; Dem++)
+	{
+		if (board.box[CurrDong + Dem][CurrCot - Dem] == -1)
+			SoQuanTa++;
+		else if (board.box[CurrDong + Dem][CurrCot - Dem] == 1)
+		{
+			DiemTong -= 9;
+			SoQuanDich++;
+			break;
+		}
+		else
+			break;
+	}
+	if (SoQuanTa >= 5)
+	{
+		return MangDiemTanCong[SoQuanTa];
+	}
+	if (SoQuanDich == 2)
+		return 0;
+	DiemTong -= MangDiemTanCong[SoQuanDich]; //có thể chỉnh
+	DiemTC += MangDiemTanCong[SoQuanTa];//có thể chỉnh
+	DiemTong += DiemTC;
+	return DiemTong;
+}
+int Bot::DiemTC_DuyetCheoXuoi(int CurrDong, int CurrCot)
+{
+	int DiemTong = 0;
+	int DiemTC = 0;
+	int SoQuanTa = 0;
+	int SoQuanDich = 0;
+	for (int Dem = 1; Dem < 6 && CurrDong + Dem < ROW && CurrCot + Dem < COL; Dem++)
+	{
+		if (board.box[CurrDong + Dem][CurrCot + Dem] == -1)
+			SoQuanTa++;
+		else if (board.box[CurrDong + Dem][CurrCot + Dem] == 1)
+		{
+			DiemTong -= 9;
+			SoQuanDich++;
+			break;
+		}
+		else
+			break;
+	}
+	for (int Dem = 1; Dem < 6 && CurrDong - Dem >= 0 && CurrCot - Dem >= 0; Dem++)
+	{
+		if (board.box[CurrDong - Dem][CurrCot - Dem] == -1)
+			SoQuanTa++;
+		else if (board.box[CurrDong - Dem][CurrCot - Dem] == 1)
+		{
+			DiemTong -= 9;
+			SoQuanDich++;
+			break;
+		}
+		else
+			break;
+	}
+	if (SoQuanTa >= 5)
+	{
+		return MangDiemTanCong[SoQuanTa];
+	}
+	if (SoQuanDich == 2)
+		return 0;
+	DiemTong -= MangDiemTanCong[SoQuanDich]; //có thể chỉnh
+	DiemTC += MangDiemTanCong[SoQuanTa];//có thể chỉnh
+	DiemTong += DiemTC;
+	return DiemTong;
+}
+int Bot::DiemPN_DuyetDoc(int CurrDong, int CurrCot)
+{
+	int DiemTong = 0;
+	int SoQuanTa = 0;
+	int SoQuanDich = 0;
+	for (int Dem = 1; Dem < 6 && CurrDong + Dem < ROW; Dem++)
+	{
+		if (board.box[CurrDong + Dem][CurrCot] == -1)
+		{
+			SoQuanTa++;
+			break;
+		}
+		else if (board.box[CurrDong + Dem][CurrCot] == 1)
+		{
+			SoQuanDich++;
+		}
+		else
+			break;
+	}
+	for (int Dem = 1; Dem < 6 && CurrDong - Dem >= 0; Dem++)
+	{
+		if (board.box[CurrDong - Dem][CurrCot] == -1)
+		{
+			SoQuanTa++; break;
+		}
+		else if (board.box[CurrDong - Dem][CurrCot] == 1)
+		{
+			SoQuanDich++;
+		}
+		else
+			break;
+	}
+	if (SoQuanTa == 2) //chặn 2 đầu hoặc cắt đường 5
+		return 0;
+	DiemTong += MangDiemPhongNgu[SoQuanDich];
+	if (SoQuanDich > 0)
+	{
+		DiemTong -= MangDiemTanCong[SoQuanTa] * 2;
+	}
+	return DiemTong;
+}
+int Bot::DiemPN_DuyetNgang(int CurrDong, int CurrCot)
+{
+	int DiemTong = 0;
+	int SoQuanTa = 0;
+	int SoQuanDich = 0;
+	for (int Dem = 1; Dem < 6 && CurrCot + Dem < COL; Dem++)
+	{
+		if (board.box[CurrDong][CurrCot + Dem] == -1)
+		{
+			SoQuanTa++; break;
+		}
+		else if (board.box[CurrDong][CurrCot + Dem] == 1)
+		{
+			SoQuanDich++;
+		}
+		else
+			break;
+	}
+	for (int Dem = 1; Dem < 6 && CurrCot - Dem >= 0; Dem++)
+	{
+		if (board.box[CurrDong][CurrCot - Dem] == -1)
+		{
+			SoQuanTa++; break;
+		}
+		else if (board.box[CurrDong][CurrCot - Dem] == 1)
+		{
+			SoQuanDich++;
+		}
+		else
+			break;
+	}
+	if (SoQuanTa == 2)
+		return 0;
+	DiemTong += MangDiemPhongNgu[SoQuanDich];
+	if (SoQuanDich > 0)
+	{
+		DiemTong -= MangDiemTanCong[SoQuanTa] * 2;
+	}
+	return DiemTong;
+}
+int Bot::DiemPN_DuyetCheoNguoc(int CurrDong, int CurrCot)
+{
+	int DiemTong = 0;
+	int SoQuanTa = 0;
+	int SoQuanDich = 0;
+	for (int Dem = 1; Dem < 6 && CurrCot + Dem < COL &&CurrDong - Dem >= 0; Dem++)
+	{
+		if (board.box[CurrDong - Dem][CurrCot + Dem] == -1)
+		{
+			SoQuanTa++; break;
+		}
+		else if (board.box[CurrDong - Dem][CurrCot + Dem] == 1)
+		{
+			SoQuanDich++;
+		}
+		else
+			break;
+	}
+	for (int Dem = 1; Dem < 6 && CurrCot - Dem >= 0 && CurrDong + Dem < ROW; Dem++)
+	{
+		if (board.box[CurrDong + Dem][CurrCot - Dem] == -1)
+		{
+			SoQuanTa++; break;
+		}
+		else if (board.box[CurrDong + Dem][CurrCot - Dem] == 1)
+		{
+			SoQuanDich++;
+		}
+		else
+			break;
+	}
+	if (SoQuanTa == 2)
+		return 0;
+	DiemTong += MangDiemPhongNgu[SoQuanDich];
+	if (SoQuanDich > 0)
+	{
+		DiemTong -= MangDiemTanCong[SoQuanTa] * 2;
+	}
+	return DiemTong;
+}
+int Bot::DiemPN_DuyetCheoXuoi(int CurrDong, int CurrCot)
+{
+	int DiemTong = 0;
+	int SoQuanTa = 0;
+	int SoQuanDich = 0;
+	for (int Dem = 1; Dem < 6 && CurrDong + Dem < ROW &&CurrCot + Dem < COL; Dem++)
+	{
+		if (board.box[CurrDong + Dem][CurrCot + Dem] == -1)
+		{
+			SoQuanTa++; break;
+		}
+		else if (board.box[CurrDong + Dem][CurrCot + Dem] == 1)
+		{
+			SoQuanDich++;
+		}
+		else
+			break;
+	}
+	for (int Dem = 1; Dem < 6 && CurrDong - Dem >= 0 && CurrCot - Dem >= 0; Dem++)
+	{
+		if (board.box[CurrDong - Dem][CurrCot - Dem] == -1)
+		{
+			SoQuanTa++; break;
+		}
+		else if (board.box[CurrDong - Dem][CurrCot - Dem] == 1)
+		{
+			SoQuanDich++;
+		}
+		else
+			break;
+	}
+	if (SoQuanTa == 2)
+		return 0;
+	DiemTong += MangDiemPhongNgu[SoQuanDich];
+	if (SoQuanDich > 0)
+	{
+		DiemTong -= MangDiemTanCong[SoQuanTa] * 2;
+	}
+	return DiemTong;
+}
